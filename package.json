@@ -35,11 +35,8 @@
   ],
   "dependencies": {
     "@sinclair/typebox": "0.34.41",
-    "@ubiquity-os/plugin-sdk": "^3.4.0",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
-    "dotenv": "17.2.3",
-    "hono": "^4.10.6",
-    "ts-node": "^10.9.2"
+    "dotenv": "17.2.3"
   },
   "devDependencies": {
     "@commitlint/cli": "20.1.0",
@@ -55,7 +52,6 @@
     "@types/jest": "^30.0.0",
     "@types/node": "24.10.1",
     "@ubiquity-os/eslint-plugin-no-empty-strings": "^1.0.3",
-    "cross-env": "^10.1.0",
     "cspell": "9.3.2",
     "eslint": "9.39.1",
     "eslint-plugin-check-file": "3.3.1",
@@ -69,8 +65,7 @@
     "npm-run-all": "4.1.5",
     "prettier": "3.6.2",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.47.0",
-    "wrangler": "4.47.0"
+    "typescript-eslint": "8.47.0"
   },
   "lint-staged": {
     "*.ts": [

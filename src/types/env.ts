@@ -1,17 +1,28 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import "dotenv/config";
-import { LOG_LEVEL } from "@ubiquity-os/ubiquity-os-logger";
+import { Logger } from "../utils/logger";
 
-/**
- * Define sensitive environment variables here.
- *
- * These are fed into the worker/workflow as `env` and are
- * taken from either `dev.vars` or repository secrets.
- * They are used with `process.env` but are type-safe.
- */
 export const envSchema = T.Object({
-  LOG_LEVEL: T.Optional(T.Enum(LOG_LEVEL, { default: LOG_LEVEL.INFO })),
-  KERNEL_PUBLIC_KEY: T.Optional(T.String()),
+  HOT_WALLET_PRIVATE_KEY: T.String({
+    description: "The private key of the hot wallet",
+    pattern: "^0x[a-fA-F0-9]{64}$",
+    message: "The private key must be a valid Ethereum private key starting with 0x",
+  }),
 });
 
 export type Env = StaticDecode<typeof envSchema>;
+
+export async function validateEnv(env: NodeJS.ProcessEnv) {
+  try {
+    const clean = Value.Clean(envSchema, env);
+
+    if (Value.Errors(envSchema, clean)) {
+      throw Logger.error("Invalid environment variables", { errors: Value.Errors(envSchema, clean) });
+    }
+
+    return Value.Decode(envSchema, Value.Default(envSchema, clean));
+  } catch (err) {
+    throw Logger.error("Failed to validate environment variables", { err });
+  }
+}
