@@ -1,0 +1,3 @@
+dist/** linguist-generated
+*.lockb linguist-generated
+*.lock linguist-generated
