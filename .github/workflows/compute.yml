@@ -1,41 +1,31 @@
-name: "the name of the plugin"
+name: "UUSD Arbitrage Bot"
 
 on:
+  schedule:
+    - cron: "0 */6 * * *" # Every 6 hours
   workflow_dispatch:
-    inputs:
-      stateId:
-        description: "State Id"
-      eventName:
-        description: "Event Name"
-      eventPayload:
-        description: "Event Payload"
-      settings:
-        description: "Settings"
-      authToken:
-        description: "Auth Token"
-      ref:
-        description: "Ref"
-      signature:
-        description: "The kernel signature"
-      command:
-        description: "Command from the Kernel"
-        required: false
 
 jobs:
   compute:
-    name: "plugin name"
+    name: "UUSD Arbitrage Bot"
     runs-on: ubuntu-latest
     permissions: write-all
-    environment: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'main' || 'development' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'main' || 'development' }}
     env:
-      PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
-      LOG_LEVEL: ${{ secrets.LOG_LEVEL || 'info' }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      HOT_WALLET_PRIVATE_KEY: ${{ secrets.HOT_WALLET_PRIVATE_KEY }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-      - name: execute directive
-        run: node ./dist/index.js
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Run UUSD Arbitrage Bot
+        run: bun ./src/action.ts
