@@ -1,42 +1,48 @@
 {
-  "name": "plugin-template",
+  "name": "uusd-arb-bot",
   "version": "1.0.0",
-  "description": "Ubiquibot plugin template repository with TypeScript support.",
+  "description": "UUSD peg maintenance bot - maintains UUSD price stability via Curve pool arbitrage",
   "author": "Ubiquity DAO",
   "license": "MIT",
-  "main": "src/worker.ts",
+  "main": "src/action.ts",
   "type": "module",
   "engines": {
     "node": ">=24.11.0"
   },
   "scripts": {
-    "dev:bun": "bun --watch --no-clear-screen --port 4000 src/worker.ts",
-    "dev:deno": "deno serve -A --watch --no-clear-screen --port 4000 src/worker.ts",
+    "start": "tsx src/action.ts",
+    "start:dry-run": "EXECUTE_ENABLED=false tsx src/action.ts",
+    "cli": "npx tsx cli.ts",
+    "cli:execute": "npx tsx cli.ts -- --execute",
+    "cli:backtest": "npx tsx cli.ts -- --backtest",
     "build": "tsc --project tsconfig.json",
     "format": "run-p format:*",
-    "check-formatting": "run-p check-formatting:* format:cspell",
-    "check-formatting:lint": "eslint --fix-dry-run",
     "format:lint": "eslint --fix .",
     "format:prettier": "prettier --write .",
-    "check-formatting:prettier": "prettier --check .",
     "format:cspell": "cspell **/*",
     "knip": "knip --config .github/knip.ts",
     "knip-ci": "knip --no-exit-code --reporter json --config .github/knip.ts",
-    "test": "cross-env NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --setupFiles dotenv/config --coverage",
-    "worker": "wrangler dev --env dev --port 4000",
+    "test": "jest --setupFiles dotenv/config --coverage",
+    "test:integration": "jest --config jest.integration.config.ts",
+    "test:anvil": "anvil --host 127.0.0.1 --port 8545 --fork-url https://rpc.ubq.fi/1 --chain-id 1",
     "prepare": "husky"
   },
   "keywords": [
     "typescript",
-    "template",
+    "uusd",
+    "arbitrage",
+    "stablecoin",
+    "peg-maintenance",
+    "curve",
+    "defi",
     "dao",
-    "ubiquity",
-    "open-source"
+    "ubiquity"
   ],
   "dependencies": {
     "@sinclair/typebox": "0.34.41",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
-    "dotenv": "17.2.3"
+    "dotenv": "17.2.3",
+    "viem": "^2.40.3"
   },
   "devDependencies": {
     "@commitlint/cli": "20.1.0",

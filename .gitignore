@@ -2,6 +2,8 @@
 .DS_Store
 # node
 node_modules
+# generated backtest results
+backtest-results-*.json
 # yarn2
 .yarn
 .pnp.cjs

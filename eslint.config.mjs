@@ -141,10 +141,21 @@ export default defineConfig(
         {
           selector: "variableLike",
           format: ["strictCamelCase"],
+          leadingUnderscore: "allow",
+          trailingUnderscore: "allow",
         },
         {
           selector: ["function", "variable"],
           format: ["strictCamelCase"],
+        },
+        {
+          selector: "parameter",
+          format: ["strictCamelCase"],
+          leadingUnderscore: "allow",
+          filter: {
+            regex: "^_$",
+            match: false,
+          },
         },
       ],
     },
