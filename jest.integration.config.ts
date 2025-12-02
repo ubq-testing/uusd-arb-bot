@@ -24,7 +24,7 @@ const cfg: Config = {
   maxWorkers: 1,
   // No coverage for integration tests
   collectCoverage: false,
-  reporters: ["default"],
+  reporters: ["default", "jest-md-dashboard"],
   extensionsToTreatAsEsm: [".ts", ".tsx"],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
