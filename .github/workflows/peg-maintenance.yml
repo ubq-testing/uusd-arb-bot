@@ -1,0 +1,51 @@
+name: UUSD Peg Maintenance
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (don't execute trades)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+jobs:
+  maintain-peg:
+    name: Check and Maintain UUSD Peg
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Peg Maintenance
+        env:
+          HOT_WALLET_PRIVATE_KEY: ${{ secrets.HOT_WALLET_PRIVATE_KEY }}
+          DEVIATION_THRESHOLD: ${{ vars.DEVIATION_THRESHOLD || '0.01' }}
+          MAX_GAS_PRICE_GWEI: ${{ vars.MAX_GAS_PRICE_GWEI || '50' }}
+          MAX_SLIPPAGE: ${{ vars.MAX_SLIPPAGE || '0.01' }}
+          EXECUTE_ENABLED: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.dry_run != 'true' }}
+        run: bun run src/action.ts
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peg-maintenance-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
