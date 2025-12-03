@@ -1,45 +1,50 @@
 {
-  "name": "plugin-template",
+  "name": "uusd-arb-bot",
   "version": "1.0.0",
-  "description": "Ubiquibot plugin template repository with TypeScript support.",
+  "description": "UUSD peg maintenance bot - maintains UUSD price stability via Curve pool arbitrage",
   "author": "Ubiquity DAO",
   "license": "MIT",
-  "main": "src/worker.ts",
+  "main": "src/action.ts",
   "type": "module",
   "engines": {
     "node": ">=24.11.0"
   },
   "scripts": {
-    "dev:bun": "bun --watch --no-clear-screen --port 4000 src/worker.ts",
-    "dev:deno": "deno serve -A --watch --no-clear-screen --port 4000 src/worker.ts",
+    "start": "npx tsx src/action.ts",
+    "start:dry-run": "EXECUTE_ENABLED=false npx tsx src/action.ts",
+    "start:curve": "STRATEGY_MODE=curve-swap npx tsx src/action.ts",
+    "start:ubiquity": "STRATEGY_MODE=ubiquity-pool npx tsx src/action.ts",
+    "cli": "npx tsx cli.ts",
+    "cli:execute": "npx tsx cli.ts -- --execute",
+    "cli:backtest": "npx tsx cli.ts -- --backtest",
     "build": "tsc --project tsconfig.json",
     "format": "run-p format:*",
-    "check-formatting": "run-p check-formatting:* format:cspell",
-    "check-formatting:lint": "eslint --fix-dry-run",
     "format:lint": "eslint --fix .",
     "format:prettier": "prettier --write .",
-    "check-formatting:prettier": "prettier --check .",
     "format:cspell": "cspell **/*",
     "knip": "knip --config .github/knip.ts",
     "knip-ci": "knip --no-exit-code --reporter json --config .github/knip.ts",
-    "test": "cross-env NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --setupFiles dotenv/config --coverage",
-    "worker": "wrangler dev --env dev --port 4000",
+    "test": "jest --setupFiles dotenv/config --coverage",
+    "test:integration": "jest --config jest.integration.config.ts",
+    "test:anvil": "anvil --host 127.0.0.1 --port 8545 --fork-url https://rpc.ubq.fi/1 --chain-id 1",
     "prepare": "husky"
   },
   "keywords": [
     "typescript",
-    "template",
+    "uusd",
+    "arbitrage",
+    "stablecoin",
+    "peg-maintenance",
+    "curve",
+    "defi",
     "dao",
-    "ubiquity",
-    "open-source"
+    "ubiquity"
   ],
   "dependencies": {
     "@sinclair/typebox": "0.34.41",
-    "@ubiquity-os/plugin-sdk": "^3.4.0",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
     "dotenv": "17.2.3",
-    "hono": "^4.10.6",
-    "ts-node": "^10.9.2"
+    "viem": "^2.40.3"
   },
   "devDependencies": {
     "@commitlint/cli": "20.1.0",
@@ -55,7 +60,6 @@
     "@types/jest": "^30.0.0",
     "@types/node": "24.10.1",
     "@ubiquity-os/eslint-plugin-no-empty-strings": "^1.0.3",
-    "cross-env": "^10.1.0",
     "cspell": "9.3.2",
     "eslint": "9.39.1",
     "eslint-plugin-check-file": "3.3.1",
@@ -69,8 +73,7 @@
     "npm-run-all": "4.1.5",
     "prettier": "3.6.2",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.47.0",
-    "wrangler": "4.47.0"
+    "typescript-eslint": "8.47.0"
   },
   "lint-staged": {
     "*.ts": [

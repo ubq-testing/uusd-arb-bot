@@ -1,0 +1,86 @@
+[
+  {
+    "inputs": [],
+    "name": "getDollarPriceUsd",
+    "outputs": [{ "internalType": "uint256", "name": "dollarPriceUsd", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "collateralRatio",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "collateralIndex", "type": "uint256" }],
+    "name": "freeCollateralBalance",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "collateralIndex", "type": "uint256" },
+      { "internalType": "uint256", "name": "dollarAmount", "type": "uint256" }
+    ],
+    "name": "getDollarInCollateral",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "userAddress", "type": "address" },
+      { "internalType": "uint256", "name": "collateralIndex", "type": "uint256" }
+    ],
+    "name": "getRedeemCollateralBalance",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "collateralIndex", "type": "uint256" },
+      { "internalType": "uint256", "name": "dollarAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "dollarOutMin", "type": "uint256" },
+      { "internalType": "uint256", "name": "maxCollateralIn", "type": "uint256" },
+      { "internalType": "uint256", "name": "maxGovernanceIn", "type": "uint256" },
+      { "internalType": "bool", "name": "isOneToOne", "type": "bool" }
+    ],
+    "name": "mintDollar",
+    "outputs": [
+      { "internalType": "uint256", "name": "totalDollarMint", "type": "uint256" },
+      { "internalType": "uint256", "name": "collateralNeeded", "type": "uint256" },
+      { "internalType": "uint256", "name": "governanceNeeded", "type": "uint256" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "collateralIndex", "type": "uint256" },
+      { "internalType": "uint256", "name": "dollarAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "governanceOutMin", "type": "uint256" },
+      { "internalType": "uint256", "name": "collateralOutMin", "type": "uint256" }
+    ],
+    "name": "redeemDollar",
+    "outputs": [
+      { "internalType": "uint256", "name": "collateralOut", "type": "uint256" },
+      { "internalType": "uint256", "name": "governanceOut", "type": "uint256" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "collateralIndex", "type": "uint256" }],
+    "name": "collectRedemption",
+    "outputs": [
+      { "internalType": "uint256", "name": "governanceAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "collateralAmount", "type": "uint256" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

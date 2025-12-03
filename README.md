@@ -1,93 +1,272 @@
-# `@ubiquity-os/plugin-template`
+# UUSD Arbitrage Bot
 
-## Prerequisites
+A simple, focused bot that maintains the UUSD stablecoin peg through automated market operations on the Curve LUSD/UUSD pool.
 
-- A good understanding of how the [kernel](https://github.com/ubiquity/ubiquibot-kernel) works and how to interact with it.
-- A basic understanding of the Ubiquibot configuration and how to define your plugin's settings.
+## Overview
 
-## Getting Started
+This bot runs as a GitHub Actions cron job every 6 hours to check the UUSD price and execute stabilizing trades when needed.
 
-1. Create a new repository using this template.
-2. Clone the repository to your local machine.
-3. Install the dependencies preferably using `bun`.
+### How It Works
 
-## Creating a new plugin
+1. **Price Monitoring**: Fetches UUSD price from both on-chain Curve oracle and GeckoTerminal API for data integrity
+2. **Deviation Detection**: Checks if price deviates beyond configurable threshold (default: 1%)
+3. **Trade Calculation**: Calculates optimal trade size to restore peg without over-correcting
+4. **Gas Estimation**: Uses on-chain simulation for accurate gas cost estimation
+5. **Profitability Check**: Only executes if trade is profitable after all costs
+6. **Trade Execution**: Swaps on Curve pool to restore price toward $1.00
 
-- If your plugin is to be used as a slash command which should have faster response times as opposed to longer running GitHub action tasks, you should use the `worker` type.
+### Stabilization Logic
 
-1. Ensure you understand and have setup the [kernel](https://github.com/ubiquity/ubiquibot-kernel).
-2. Update [compute.yml](./.github/workflows/compute.yml) with your plugin's name and update the `id`.
-3. Update [context.ts](./src/types/context.ts) with the events that your plugin will fire on.
-4. Update [manifest.json](./manifest.json) with a proper description of your plugin.
-5. Update [plugin-input.ts](./src/types/plugin-input.ts) to match the `with:` settings in your org or repo level configuration.
+- **UUSD > $1.00**: Sell UUSD for LUSD (increases UUSD supply in pool, decreases price)
+- **UUSD < $1.00**: Buy UUSD with LUSD (decreases UUSD supply in pool, increases price)
 
-- Your plugin config should look similar to this:
+## Configuration
 
-```yml
-plugins:
-  - name: hello-world
-    id: hello-world
-    uses:
-      - plugin: http://localhost:4000
-        with:
-          # Define configurable items here and the kernel will pass these to the plugin.
-          configurableResponse: "Hello, is it me you are looking for?"
-          customStringsUrl: "https://raw.githubusercontent.com/ubiquibot/plugin-template/development/strings.json"
+### Environment Variables
+
+| Variable                 | Required | Default | Description                            |
+| ------------------------ | -------- | ------- | -------------------------------------- |
+| `HOT_WALLET_PRIVATE_KEY` | ✅       | -       | Private key for the trading wallet     |
+| `DEVIATION_THRESHOLD`    | ❌       | `0.01`  | Price deviation threshold (0.01 = 1%)  |
+| `MAX_GAS_PRICE_GWEI`     | ❌       | `50`    | Maximum gas price in gwei              |
+| `MAX_SLIPPAGE`           | ❌       | `0.01`  | Maximum slippage tolerance (0.01 = 1%) |
+| `EXECUTE_ENABLED`        | ❌       | `false` | Set to `true` to enable trading        |
+
+### GitHub Actions Secrets
+
+Set these in your repository settings:
+
+- `HOT_WALLET_PRIVATE_KEY`: Your trading wallet's private key
+
+### GitHub Actions Variables
+
+Set these in your repository settings for runtime configuration:
+
+- `DEVIATION_THRESHOLD`
+- `MAX_GAS_PRICE_GWEI`
+- `MAX_SLIPPAGE`
+
+## Usage
+
+### Local Development
+
+```bash
+# Install dependencies
+bun install
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your configuration
+# Make sure EXECUTE_ENABLED=false for testing!
+
+# Run in dry-run mode (recommended for testing)
+bun run start:dry-run
+
+# Run with execution enabled (use with caution!)
+bun start
 ```
 
-###### At this stage, your plugin will fire on your defined events with the required settings passed in from the kernel. You can now start writing your plugin's logic.
+### GitHub Actions
 
-6. Start building your plugin by adding your logic to the [plugin.ts](./src/index.ts) file.
+The bot runs automatically every 6 hours via the `peg-maintenance.yml` workflow.
 
-## Testing a plugin
+## Architecture
 
-### Worker Plugins
-
-- `bun worker` - to run the worker locally.
-- To trigger the worker, `POST` requests to http://localhost:4000/ with an event payload similar to:
-
-```ts
-await fetch("http://localhost:4000/", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    stateId: "",
-    eventName: "",
-    eventPayload: "",
-    settings: "",
-    ref: "",
-    authToken: "",
-  }),
-});
+```
+src/
+├── action.ts              # Main entry point
+├── types/
+│   ├── config.ts          # Configuration and constants
+│   ├── env.ts             # Environment validation
+│   └── index.ts           # Core type definitions
+├── services/
+│   ├── curve-pool.ts      # Curve pool interactions
+│   ├── price-monitor.ts   # Price monitoring
+│   ├── gas-estimator.ts   # Gas cost estimation
+│   ├── trade-calculator.ts # Trade size calculation
+│   └── trade-executor.ts  # Trade execution
+└── utils/
+    └── logger.ts          # Logging utility
 ```
 
-A full example can be found [here](https://github.com/ubiquibot/assistive-pricing/blob/623ea3f950f04842f2d003bda3fc7b7684e41378/tests/http/request.http).
+## Contract Addresses
 
-#### Deploying the Worker
+| Contract             | Address                                      |
+| -------------------- | -------------------------------------------- |
+| Curve LUSD/UUSD Pool | `0xcC68509F9cA0E1ed119EAC7c468EC1b1C42f384F` |
+| UUSD Token           | `0xb6919ef2ee4afc163bc954c5678e2bb570c2d103` |
+| LUSD Token           | `0x5f98805A4E8be255a32880FDeC7F6728C6568bA0` |
 
-For testing purposes, the worker can be deployed through the Worker Deploy and Worker Delete workflows. It requires to
-create a personal [Cloudflare Account](https://www.cloudflare.com/), and fill the `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` within your
-GitHub Action Secrets.
+## StableSwap Algorithm & Constants
 
-### Action Plugins
+This section documents the mathematical derivations behind the constants used in trade calculations.
 
-- Ensure the kernel is running and listening for events.
-- Fire an event in/to the repo where the kernel is installed. This can be done in a number of ways, the easiest being via the GitHub UI or using the GitHub API, such as posting a comment, opening an issue, etc in the org/repo where the kernel is installed.
-- The kernel will process the event and dispatch it using the settings defined in your `.ubiquibot-config.yml`.
-- The `compute.yml` workflow will run and execute your plugin's logic.
-- You can view the logs in the Actions tab of your repo.
+### Price Data Sources
 
-[Nektos Act](https://github.com/nektos/act) - a tool for running GitHub Actions locally.
+| Use Case       | Data Source              | Method                                     | Notes                            |
+| -------------- | ------------------------ | ------------------------------------------ | -------------------------------- |
+| Live Operation | On-chain Curve contracts | `price_oracle()`, `get_dy()`, `exchange()` | Real-time, authoritative data    |
+| Backtesting    | GeckoTerminal OHLCV API  | Historical candle data                     | Simulates historical pool states |
 
-## More information
+**Why OHLCV for backtesting?**
 
-- [Full Ubiquibot Configuration](https://github.com/ubiquity/ubiquibot/blob/0fde7551585499b1e0618ec8ea5e826f11271c9c/src/types/configuration-types.ts#L62) - helpful for defining your plugin's settings as they are strongly typed and will be validated by the kernel.
-- [Ubiquibot V1](https://github.com/ubiquity/ubiquibot) - helpful for porting V1 functionality to V2, helper/utility functions, types, etc. Everything is based on the V1 codebase but with a more modular approach. When using V1 code, keep in mind that most all code will need refactored to work with the new V2 architecture.
+- On-chain calls (`price_oracle()`, `get_dy()`) only return the **current** pool state
+- There is no way to query "what was the pool price at block X" without an archive node
+- OHLCV data provides historical price movements to simulate bot performance over time
+- The OHLCV ratio represents the pool's trading pair ratio (LUSD per UUSD), not USD price
 
-## Examples
+**Why not just use `getPool()` from GeckoTerminal?**
 
-- [Start/Stop Slash Command](https://github.com/ubq-testing/start-stop-module) - simple
-- [Assistive Pricing Plugin](https://github.com/ubiquibot/assistive-pricing) - complex
-- [Conversation Rewards](https://github.com/ubiquibot/conversation-rewards) - really complex
+- `getPool()` returns **current** pool state only
+- OHLCV provides historical time-series data with open/high/low/close/volume
+- Backtesting requires historical data to simulate past market conditions
+
+### Curve StableSwap Overview
+
+Curve uses the **StableSwap invariant**, a hybrid between constant-product (x·y=k) and constant-sum (x+y=k) formulas:
+
+```
+A·n^n·∑xᵢ + D = A·D·n^n + D^(n+1) / (n^n·∏xᵢ)
+```
+
+Where:
+
+- `A` = Amplification parameter (typically 100-2000 for stablecoin pools)
+- `n` = Number of tokens in pool (2 for LUSD/UUSD)
+- `D` = Total deposits (in normalized units)
+- `xᵢ` = Token balances
+
+The key insight: **Higher A concentrates liquidity around 1:1**, meaning:
+
+1. Trades near peg have minimal slippage
+2. Less capital is needed to move price compared to Uniswap-style AMMs
+3. Price becomes more sensitive to imbalances as they grow
+
+### Constants Explained
+
+#### `adjustmentFactor = 2` (trade-calculator.ts)
+
+**Purpose**: Initial estimate of UUSD needed to restore peg.
+
+**Derivation**:
+
+- In a constant-product AMM, moving price by X% requires ~X% of pool reserves
+- StableSwap's amplification concentrates liquidity, requiring ~50% less capital
+- Therefore: `tradeAmount ≈ deviation × poolSize / 2`
+
+**Formula**:
+
+```typescript
+estimatedAmount = (smallerPoolSide × deviation) / 2
+```
+
+**Example**: 2% depeg in a $100k pool → ~$1,000 trade needed (vs ~$2,000 in Uniswap).
+
+#### `curveEfficiencyFactor = 0.5` (price-monitor.ts)
+
+**Purpose**: Same as above, used for estimating capital requirements in price monitoring.
+
+**Derivation**: Empirically derived from Curve pool behavior. The factor accounts for:
+
+1. StableSwap's concentrated liquidity around peg
+2. Reduced price impact for trades near 1:1
+
+#### `slippage × 10` Amplification (trade-calculator.ts)
+
+**Purpose**: Estimate price impact from a simulated trade.
+
+**Derivation**:
+
+```typescript
+priceImpact = (tradeSize / poolSize) × (1 + slippage × 10)
+```
+
+The `× 10` factor accounts for:
+
+1. **Non-linearity**: StableSwap price curves are steep away from peg
+2. **Slippage-to-price correlation**: Higher slippage indicates larger price movement
+3. **Empirical fit**: Calibrated against real Curve pool behavior
+
+**Note**: This is used only for binary search refinement. Actual quotes come from on-chain `get_dy()` calls.
+
+### Simulation Limitations
+
+The `simulatePriceImpact()` function in `trade-calculator.ts` is an **approximation** used during binary search to find optimal trade sizes. It has limitations:
+
+1. **Not a real oracle**: The formula is derived empirically, not from Curve's actual math
+2. **Binary search only**: Used to narrow down trade size; final execution uses real `get_dy()` quotes
+3. **Conservative approach**: Errors in simulation are caught by real on-chain validation before execution
+
+**Why approximate instead of query on-chain for each iteration?**
+
+- Binary search requires 10+ iterations to converge
+- Each on-chain `get_dy()` call adds ~100-500ms latency
+- The approximation gets us "close enough" for the initial estimate
+- Final trade uses real `get_dy()` quote with slippage protection
+
+**Live vs Backtest execution flow:**
+
+```
+Live:     get_dy() → simulatePriceImpact() [binary search] → get_dy() → exchange()
+          ↑ real                           ↑ approximation    ↑ real    ↑ real
+
+Backtest: MockPool.getLusdToUusdQuote() → simulatePriceImpact() → analysis
+          ↑ approximation                  ↑ approximation       (no execution)
+```
+
+#### `0.1` Slippage Multiplier (mock-curve-pool.ts)
+
+**Purpose**: Mock pool for backtesting only (not used in live operation).
+
+**Formula**:
+
+```typescript
+slippageFactor = 1 - (tradeSize / poolSize) × 0.1
+```
+
+**Derivation**:
+
+- Empirically observed from Curve stablecoin pools with A=100-500
+- A trade of 10% of pool size → ~1% slippage (0.1 × 0.1 = 0.01)
+- A trade of 1% of pool size → ~0.1% slippage
+- This linear approximation holds well near peg (±5% deviation)
+
+**Limitation**: This is a simplification. Real StableSwap slippage is non-linear and depends on:
+
+- Amplification parameter (A)
+- Current pool imbalance
+- Trade direction relative to imbalance
+
+For accurate backtest results, compare against known historical trades.
+
+### Binary Search for Optimal Trade Size
+
+The bot uses binary search with real `get_dy()` quotes to find the exact trade amount:
+
+1. **Initial estimate**: `deviation × poolSize / adjustmentFactor`
+2. **Binary search**: 10 iterations testing amounts between 1 token and 3× estimate
+3. **Selection criteria**: Amount that brings pool ratio closest to 1.0
+
+This approach uses **real on-chain data** via `get_dy()` rather than approximations for the final trade size.
+
+## Safety Features
+
+1. **Dry Run Mode**: Default behavior simulates trades without execution
+2. **Gas Price Limits**: Skips trading when gas exceeds threshold
+3. **Profitability Check**: Only trades when profitable after all costs
+4. **Slippage Protection**: Transactions revert if slippage exceeds tolerance
+5. **Price Validation**: Cross-checks prices between on-chain and API sources
+
+## Testing
+
+```bash
+# Run unit tests
+bun run test
+
+# Spawn Anvil and to run integration tests against a local fork
+bun run test:anvil
+
+# Run integration tests
+bun run test:integration
+```

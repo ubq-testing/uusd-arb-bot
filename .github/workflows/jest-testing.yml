@@ -19,11 +19,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Jest With Coverage
-        run: |
-          bun install --frozen-lockfile
-          bun run test
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Add Jest Report to Summary
+      - name: Jest With Coverage (Unit Tests)
+        run: bun run test
+
+      - name: Save Unit Test Report
         if: always()
-        run: echo "$(cat test-dashboard.md)" >> $GITHUB_STEP_SUMMARY
+        run: |
+          echo "## Unit Tests" >> $GITHUB_STEP_SUMMARY
+          echo "$(cat test-dashboard.md)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Start Anvil
+        run: bun run test:anvil &
+
+      - name: Wait for Anvil
+        run: |
+          for i in {1..30}
+          do
+            if curl -s http://127.0.0.1:8545; then
+              break
+            fi
+            sleep 1
+          done || exit 1
+
+      - name: Jest Integration Tests
+        run: bun run test:integration
+
+      - name: Save Integration Test Report
+        if: always()
+        run: |
+          echo "## Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "$(cat test-dashboard.md)" >> $GITHUB_STEP_SUMMARY

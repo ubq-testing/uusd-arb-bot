@@ -5,6 +5,7 @@ const cfg: Config = {
     "^.+\\.tsx?$": "@swc/jest",
   },
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
+  testPathIgnorePatterns: ["node_modules", "tests/integration"],
   coveragePathIgnorePatterns: ["node_modules", "mocks"],
   collectCoverage: true,
   coverageReporters: ["json", "lcov", "text", "clover", "json-summary"],
