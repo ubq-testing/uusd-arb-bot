@@ -25,7 +25,7 @@ describe("Trade Executor Integration", () => {
   let priceMonitor: PriceMonitor;
   let curvePool: CurvePoolService;
   let gasEstimator: GasEstimator;
-  let config: ReturnType<typeof createBotConfig>;
+  let config: Awaited<ReturnType<typeof createBotConfig>>;
   let snapshotId: string;
   let originalRpcUrl: string | undefined;
 
@@ -47,10 +47,12 @@ describe("Trade Executor Integration", () => {
     tradeExecutor = new TradeExecutor(curvePool, gasEstimator);
 
     config = await createBotConfig({
-      ...process.env,
+      HOT_WALLET_PRIVATE_KEY: TEST_PRIVATE_KEYS.BOT_WALLET,
       DEVIATION_THRESHOLD: "0.01",
       MAX_GAS_PRICE_GWEI: "100",
       MAX_SLIPPAGE: "0.01",
+      EXECUTE_ENABLED: "false",
+      STRATEGY_MODE: "curve-swap",
     });
     tradeCalculator = new TradeCalculator(curvePool, gasEstimator, config);
     priceMonitor = new PriceMonitor(curvePool, config);

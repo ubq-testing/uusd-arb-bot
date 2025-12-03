@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, beforeEach, afterEach } from "@jest/globals";
-import { AnvilFork, DEFAULT_ANVIL_PORT } from "./anvil";
+import { AnvilFork, DEFAULT_ANVIL_PORT, TEST_PRIVATE_KEYS } from "./anvil";
 import { TestHelper, formatTokenAmount } from "./test-helpers";
 import { PriceMonitor } from "../../src/services/price-monitor";
 import { CurvePoolService } from "../../src/services/curve-pool";
@@ -36,9 +36,12 @@ describe("Price Monitor Integration", () => {
     // Create services pointing to Anvil
     curvePool = new CurvePoolService();
     const config = await createBotConfig({
-      ...process.env,
+      HOT_WALLET_PRIVATE_KEY: TEST_PRIVATE_KEYS.BOT_WALLET,
       DEVIATION_THRESHOLD: "0.01",
       MAX_GAS_PRICE_GWEI: "100",
+      MAX_SLIPPAGE: "0.01",
+      EXECUTE_ENABLED: "false",
+      STRATEGY_MODE: "curve-swap",
     });
     priceMonitor = new PriceMonitor(curvePool, config);
 
