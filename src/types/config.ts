@@ -1,4 +1,5 @@
 import { type Address } from "viem";
+import { validateEnv } from "./env";
 
 /**
  * Contract addresses for UUSD ecosystem on Ethereum mainnet
@@ -86,6 +87,11 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 /**
+ * Strategy mode for peg restoration
+ */
+export type StrategyMode = "curve-swap" | "ubiquity-pool";
+
+/**
  * Bot configuration for peg maintenance
  * Note: Profit is NOT a configuration factor - peg stability is the priority
  */
@@ -98,17 +104,29 @@ export interface BotConfig {
   maxSlippage: number;
   /** Whether to execute trades (false = dry run) */
   executeEnabled: boolean;
+  /** Private key for the hot wallet */
+  privateKey: string;
+  /**
+   * Strategy mode for peg restoration:
+   * - curve-swap: Buy/sell UUSD in Curve pool (always available)
+   * - ubiquity-pool: Mint/redeem via Ubiquity contract (requires price thresholds)
+   */
+  strategyMode: StrategyMode;
 }
 
 /**
  * Create bot config from environment with defaults
  */
-export function createBotConfig(env: NodeJS.ProcessEnv): BotConfig {
+export async function createBotConfig(env: NodeJS.ProcessEnv): Promise<BotConfig> {
+  const validatedEnv = await validateEnv(env);
+
   return {
-    deviationThreshold: env.DEVIATION_THRESHOLD ? parseFloat(env.DEVIATION_THRESHOLD) : DEFAULT_CONFIG.DEVIATION_THRESHOLD,
-    maxGasPriceGwei: env.MAX_GAS_PRICE_GWEI ? parseInt(env.MAX_GAS_PRICE_GWEI) : DEFAULT_CONFIG.MAX_GAS_PRICE_GWEI,
-    maxSlippage: env.MAX_SLIPPAGE ? parseFloat(env.MAX_SLIPPAGE) : DEFAULT_CONFIG.MAX_SLIPPAGE,
-    executeEnabled: env.EXECUTE_ENABLED === "true",
+    deviationThreshold: validatedEnv.DEVIATION_THRESHOLD,
+    maxGasPriceGwei: validatedEnv.MAX_GAS_PRICE_GWEI,
+    maxSlippage: validatedEnv.MAX_SLIPPAGE,
+    executeEnabled: validatedEnv.EXECUTE_ENABLED,
+    privateKey: validatedEnv.HOT_WALLET_PRIVATE_KEY,
+    strategyMode: validatedEnv.STRATEGY_MODE,
   };
 }
 

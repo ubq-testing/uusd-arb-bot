@@ -15,46 +15,81 @@ export const envSchema = T.Object({
   /**
    * Optional: Price deviation threshold to trigger action (default: 0.01 = 1%)
    */
-  DEVIATION_THRESHOLD: T.Optional(
-    T.String({
-      description: "Price deviation threshold (e.g., 0.01 for 1%)",
+  DEVIATION_THRESHOLD: T.Transform(T.Union([T.Number(), T.String()], { default: 0.01, description: "Price deviation threshold (e.g., 0.01 for 1%)" }))
+    .Decode((value) => {
+      if (typeof value === "string") {
+        return parseFloat(value);
+      }
+      return value;
     })
-  ),
+    .Encode((value) => value.toString()),
 
   /**
-   * Optional: Maximum gas price in gwei (default: 50)
+   * Maximum gas price in gwei (default: 50)
    * Note: Trades are delayed (not skipped) if gas is too high
    */
-  MAX_GAS_PRICE_GWEI: T.Optional(
-    T.String({
-      description: "Maximum gas price in gwei",
+  MAX_GAS_PRICE_GWEI: T.Transform(T.Union([T.Number(), T.String()], { default: 50, description: "Maximum gas price in gwei" }))
+    .Decode((value) => {
+      if (typeof value === "string") {
+        return parseInt(value);
+      }
+      return value;
     })
-  ),
+    .Encode((value) => value.toString()),
 
   /**
-   * Optional: Maximum slippage tolerance (default: 0.01 = 1%)
+   * Maximum slippage tolerance (default: 0.01 = 1%)
    */
-  MAX_SLIPPAGE: T.Optional(
-    T.String({
-      description: "Maximum slippage tolerance",
+  MAX_SLIPPAGE: T.Transform(T.Union([T.Number(), T.String()], { default: 0.01, description: "Maximum slippage tolerance (e.g., 0.01 for 1%)" }))
+    .Decode((value) => {
+      if (typeof value === "string") {
+        return parseFloat(value);
+      }
+      return value;
     })
-  ),
+    .Encode((value) => value.toString()),
 
   /**
-   * Optional: Whether to actually execute trades (default: false for safety)
+   * Whether to actually execute trades (default: false for safety)
    */
-  EXECUTE_ENABLED: T.Optional(
-    T.String({
-      description: "Whether to execute trades (true/false)",
+  EXECUTE_ENABLED: T.Transform(T.Union([T.Boolean({}), T.String()], { default: false, description: "Whether to execute trades (true/false)" }))
+    .Decode((value) => {
+      if (typeof value === "string") {
+        return value.toLowerCase() === "true";
+      }
+      return value;
     })
-  ),
+    .Encode((value) => value.toString()),
+
+  /**
+   * Strategy mode for peg restoration (default: curve-swap)
+   * - curve-swap: Buy/sell UUSD directly in the Curve LUSD/UUSD pool
+   * - ubiquity-pool: Use Ubiquity Diamond contract to mint/redeem UUSD
+   *   (mint when price >= $1.01, redeem when price <= $0.99)
+   */
+  STRATEGY_MODE: T.Transform(
+    T.Union([T.Literal("curve-swap"), T.Literal("ubiquity-pool"), T.String()], {
+      default: "curve-swap",
+      description: "Strategy mode: curve-swap or ubiquity-pool",
+    })
+  )
+    .Decode((value) => {
+      const normalized = value.toLowerCase().trim();
+      if (normalized === "ubiquity-pool" || normalized === "ubiquity") {
+        return "ubiquity-pool" as const;
+      }
+      return "curve-swap" as const;
+    })
+    .Encode((value) => value),
 });
 
 export type Env = StaticDecode<typeof envSchema>;
 
 export async function validateEnv(env: NodeJS.ProcessEnv): Promise<Env> {
   try {
-    const clean = Value.Clean(envSchema, env);
+    // First apply defaults to get all required fields
+    const withDefaults = Value.Default(envSchema, env);
+    const clean = Value.Clean(envSchema, withDefaults);
 
     const errors = [...Value.Errors(envSchema, clean)];
     if (errors.length > 0) {
@@ -62,14 +97,7 @@ export async function validateEnv(env: NodeJS.ProcessEnv): Promise<Env> {
       throw new Error("Invalid environment variables");
     }
 
-    const decoded = Value.Decode(envSchema, Value.Default(envSchema, clean));
-
-    logger.info("Environment validated successfully", {
-      hasPrivateKey: !!decoded.HOT_WALLET_PRIVATE_KEY,
-      executeEnabled: decoded.EXECUTE_ENABLED === "true",
-    });
-
-    return decoded;
+    return Value.Decode(envSchema, clean);
   } catch (err) {
     throw logger.error("Failed to validate environment variables", { err });
   }

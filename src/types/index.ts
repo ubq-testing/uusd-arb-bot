@@ -44,6 +44,37 @@ export interface GeckoTerminalPriceData {
 }
 
 /**
+ * Ubiquity Pool action types
+ */
+export type UbiquityPoolAction = "mint-sell" | "buy-redeem" | "none";
+
+/**
+ * Peg restoration recommendation with direction and amount (Curve pool)
+ */
+export interface CurveSwapRestoration {
+  /** Direction of trade needed */
+  action: StabilizationAction;
+  /** Token to spend (LUSD if buying UUSD, UUSD if selling) */
+  tokenIn: "LUSD" | "UUSD";
+  /** Estimated amount of tokenIn needed */
+  amountIn: number;
+}
+
+/**
+ * Ubiquity Pool arbitrage recommendation
+ */
+export interface UbiquityPoolRestoration {
+  /** Action to take */
+  action: UbiquityPoolAction;
+  /** Whether the action is currently available (price thresholds met) */
+  available: boolean;
+  /** Potential profit margin if available */
+  profitMarginPercent: number;
+  /** Human-readable reason/status */
+  reason: string;
+}
+
+/**
  * Combined peg status from all sources
  */
 export interface PegStatus {
@@ -57,8 +88,10 @@ export interface PegStatus {
   severity: DeviationSeverity;
   /** Current gas price in gwei */
   gasPriceGwei: number;
-  /** Estimated UUSD amount needed to restore peg */
-  uusdToRestorePeg: number;
+  /** Curve pool swap recommendation */
+  curveSwap: CurveSwapRestoration;
+  /** Ubiquity Pool mint/redeem recommendation */
+  ubiquityPool: UbiquityPoolRestoration;
 }
 
 /**
