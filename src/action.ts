@@ -8,29 +8,32 @@
  * 4. Log complete status report
  */
 
-import { validateEnv } from "./types/env";
 import { createBotConfig } from "./types/config";
 import type { StatusReport, WalletBalances } from "./types";
-import { CurvePoolService, PriceMonitor, GasEstimator, TradeCalculator, TradeExecutor } from "./services";
 import { logger } from "./utils/logger";
+import { CurvePoolService } from "./services/curve-pool";
+import { GasEstimator } from "./services/gas-estimator";
+import { PriceMonitor } from "./services/price-monitor";
+import { TradeCalculator } from "./services/trade-calculator";
+import { TradeExecutor } from "./services/trade-executor";
 
-export default async function main() {
+async function main() {
   const startTime = Date.now();
   logger.info("=== UUSD Peg Maintenance Bot Starting ===");
 
   // Step 1: Validate environment
-  const env = await validateEnv(process.env);
-  const config = createBotConfig(env);
+  const config = await createBotConfig(process.env);
 
   logger.info("Configuration loaded", {
     deviationThreshold: (config.deviationThreshold * 100).toFixed(2) + "%",
     maxGasPriceGwei: config.maxGasPriceGwei,
     maxSlippage: (config.maxSlippage * 100).toFixed(2) + "%",
     executeEnabled: config.executeEnabled,
+    strategyMode: config.strategyMode,
   });
 
   // Step 2: Initialize services
-  const curvePool = new CurvePoolService(env.HOT_WALLET_PRIVATE_KEY);
+  const curvePool = new CurvePoolService(config.privateKey);
   const gasEstimator = new GasEstimator(curvePool);
   const priceMonitor = new PriceMonitor(curvePool, config);
   const tradeCalculator = new TradeCalculator(curvePool, gasEstimator, config);
@@ -44,8 +47,16 @@ export default async function main() {
     poolRatio: pegStatus.onChain.poolRatio.toFixed(4),
     deviationPercent: pegStatus.onChain.deviationPercent.toFixed(2) + "%",
     severity: pegStatus.severity,
-    recommendedAction: pegStatus.recommendedAction,
-    uusdToRestorePeg: pegStatus.uusdToRestorePeg,
+    strategyMode: config.strategyMode,
+    curveSwap: {
+      action: pegStatus.curveSwap.action,
+      spend: `${pegStatus.curveSwap.amountIn.toFixed(0)} ${pegStatus.curveSwap.tokenIn}`,
+    },
+    ubiquityPool: {
+      action: pegStatus.ubiquityPool.action,
+      available: pegStatus.ubiquityPool.available,
+      reason: pegStatus.ubiquityPool.reason,
+    },
     gasPriceGwei: pegStatus.gasPriceGwei.toFixed(2),
   });
 
@@ -109,18 +120,15 @@ export default async function main() {
   return report;
 }
 
-// Allow direct execution
-if (typeof require !== "undefined" && require.main === module) {
-  main()
-    .then((report) => {
-      console.log(
-        "\nFinal Report:",
-        JSON.stringify(report, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2)
-      );
-      process.exit(0);
-    })
-    .catch((error) => {
-      logger.error("Bot execution failed", { error });
-      process.exit(1);
-    });
-}
+main()
+  .then((report) => {
+    console.log(
+      "\nFinal Report:",
+      JSON.stringify(report, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2)
+    );
+    process.exit(0);
+  })
+  .catch((error) => {
+    logger.error("Bot execution failed", { error });
+    process.exit(1);
+  });

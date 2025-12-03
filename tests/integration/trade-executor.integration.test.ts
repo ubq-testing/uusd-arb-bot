@@ -46,7 +46,7 @@ describe("Trade Executor Integration", () => {
     gasEstimator = new GasEstimator(curvePool);
     tradeExecutor = new TradeExecutor(curvePool, gasEstimator);
 
-    config = createBotConfig({
+    config = await createBotConfig({
       ...process.env,
       DEVIATION_THRESHOLD: "0.01",
       MAX_GAS_PRICE_GWEI: "100",

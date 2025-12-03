@@ -10,8 +10,10 @@
     "node": ">=24.11.0"
   },
   "scripts": {
-    "start": "tsx src/action.ts",
-    "start:dry-run": "EXECUTE_ENABLED=false tsx src/action.ts",
+    "start": "npx tsx src/action.ts",
+    "start:dry-run": "EXECUTE_ENABLED=false npx tsx src/action.ts",
+    "start:curve": "STRATEGY_MODE=curve-swap npx tsx src/action.ts",
+    "start:ubiquity": "STRATEGY_MODE=ubiquity-pool npx tsx src/action.ts",
     "cli": "npx tsx cli.ts",
     "cli:execute": "npx tsx cli.ts -- --execute",
     "cli:backtest": "npx tsx cli.ts -- --backtest",

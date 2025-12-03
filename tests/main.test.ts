@@ -6,13 +6,18 @@ import { describe, expect, it, jest, beforeEach } from "@jest/globals";
 import { createBotConfig, DEFAULT_CONFIG, CONTRACTS, CURVE_POOL_INDICES, PRECISION } from "../src/types/config";
 import type { StabilizationAction } from "../src/types";
 
+// Mock private key for testing (not a real key)
+const MOCK_PRIVATE_KEY = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 describe("Bot Configuration", () => {
   beforeEach(() => {
     jest.resetModules();
   });
 
-  it("should use default values when no env vars set", () => {
-    const config = createBotConfig({});
+  it("should use default values when no env vars set", async () => {
+    const config = await createBotConfig({
+      HOT_WALLET_PRIVATE_KEY: MOCK_PRIVATE_KEY,
+    });
 
     expect(config.deviationThreshold).toBe(DEFAULT_CONFIG.DEVIATION_THRESHOLD);
     expect(config.maxGasPriceGwei).toBe(DEFAULT_CONFIG.MAX_GAS_PRICE_GWEI);
@@ -20,8 +25,9 @@ describe("Bot Configuration", () => {
     expect(config.executeEnabled).toBe(false);
   });
 
-  it("should override defaults with env vars", () => {
-    const config = createBotConfig({
+  it("should override defaults with env vars", async () => {
+    const config = await createBotConfig({
+      HOT_WALLET_PRIVATE_KEY: MOCK_PRIVATE_KEY,
       DEVIATION_THRESHOLD: "0.02",
       MAX_GAS_PRICE_GWEI: "100",
       MAX_SLIPPAGE: "0.02",

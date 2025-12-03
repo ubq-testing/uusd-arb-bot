@@ -35,7 +35,7 @@ describe("Price Monitor Integration", () => {
 
     // Create services pointing to Anvil
     curvePool = new CurvePoolService();
-    const config = createBotConfig({
+    const config = await createBotConfig({
       ...process.env,
       DEVIATION_THRESHOLD: "0.01",
       MAX_GAS_PRICE_GWEI: "100",
@@ -179,15 +179,20 @@ describe("Price Monitor Integration", () => {
     }, 30000);
 
     it("should match helper price reading", async () => {
-      const [monitorPrice, helperPrice] = await Promise.all([priceMonitor.getOnChainPriceData(), helper.getUusdPriceFromCurve()]);
+      // Note: priceMonitor.getOnChainPriceData() uses SPOT price (get_dy simulation)
+      // while helper.getUusdPriceFromCurve() uses TWAP oracle (price_oracle)
+      // These are different price sources, so we compare oracle prices directly
+      const [monitorPrice, helperOraclePrice] = await Promise.all([priceMonitor.getOnChainPriceData(), helper.getUusdPriceFromCurve()]);
 
-      const helperPriceUsd = Number(helperPrice) / 1e18;
+      const helperOraclePriceUsd = Number(helperOraclePrice) / 1e18;
+      const monitorOraclePriceUsd = Number(monitorPrice.curveOraclePrice) / 1e18;
 
-      console.log(`Monitor price: $${monitorPrice.poolRatio.toFixed(6)}`);
-      console.log(`Helper price: $${helperPriceUsd.toFixed(6)}`);
+      console.log(`Monitor spot price: $${monitorPrice.poolRatio.toFixed(6)}`);
+      console.log(`Monitor oracle price: $${monitorOraclePriceUsd.toFixed(6)}`);
+      console.log(`Helper oracle price: $${helperOraclePriceUsd.toFixed(6)}`);
 
-      // Prices should match exactly (same source)
-      expect(Math.abs(monitorPrice.poolRatio - helperPriceUsd)).toBeLessThan(0.000001);
+      // Oracle prices should match exactly (same source: price_oracle)
+      expect(Math.abs(monitorOraclePriceUsd - helperOraclePriceUsd)).toBeLessThan(0.000001);
     }, 30000);
   });
 
