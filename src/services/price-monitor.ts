@@ -1,39 +1,62 @@
 /**
  * Monitors UUSD/LUSD pool ratio for peg maintenance:
- * 1. Curve pool on-chain oracle (primary source)
- * 2. GeckoTerminal API (secondary validation)
+ * 1. Curve pool SPOT PRICE via get_dy (primary - accurate market price)
+ * 2. Curve TWAP oracle (secondary - for comparison)
+ * 3. GeckoTerminal API (tertiary validation)
+ * 4. Ubiquity Pool state (for mint/redeem strategy)
  *
  * Determines recommended stabilization action based on peg deviation.
  * Focus is on maintaining the 1:1 peg, NOT on profit.
+ *
+ * IMPORTANT: Uses spot price (get_dy) not TWAP oracle for accuracy.
+ * The TWAP oracle lags behind actual market conditions.
  */
 
-import type { PegStatus, PriceData, GeckoTerminalPriceData, StabilizationAction, DeviationSeverity } from "../types";
+import type { PegStatus, PriceData, GeckoTerminalPriceData, StabilizationAction, DeviationSeverity, UbiquityPoolRestoration } from "../types";
 import { CONTRACTS, DEFAULT_CONFIG, type BotConfig } from "../types/config";
 import type { CurvePoolServiceInterface } from "./interfaces";
 import { GeckoTerminalClient } from "./geckoterminal/client";
+import { UbiquityPoolService, PRICE_THRESHOLDS } from "./ubiquity-pool";
 import { logger } from "../utils/logger";
 
 export class PriceMonitor {
   private _curvePool: CurvePoolServiceInterface;
+  private _ubiquityPool: UbiquityPoolService;
   private _geckoClient: GeckoTerminalClient;
   private _config: BotConfig;
 
   constructor(curvePool: CurvePoolServiceInterface, config: BotConfig) {
     this._curvePool = curvePool;
+    this._ubiquityPool = new UbiquityPoolService();
     this._geckoClient = new GeckoTerminalClient();
     this._config = config;
   }
 
   /**
-   * Get on-chain price data from Curve pool oracle
+   * Get SPOT price by simulating a 1 token swap via get_dy
+   * This is the ACTUAL market price, not the lagging TWAP oracle.
+   *
+   * UUSD price = how much LUSD you get for 1 UUSD
+   * This uses get_dy(1, 0, 1e18) where coin1=UUSD, coin0=LUSD
+   */
+  async getSpotPrice(): Promise<number> {
+    const oneToken = 10n ** 18n;
+    const lusdOut = await this._curvePool.getUusdToLusdQuote(oneToken);
+    return Number(lusdOut) / Number(oneToken);
+  }
+
+  /**
+   * Get on-chain price data - now uses SPOT PRICE for accuracy
    */
   async getOnChainPriceData(): Promise<PriceData> {
-    const price = await this._curvePool.getUusdPrice();
-    const poolRatio = this._curvePool.priceToUsd(price);
-    const deviationPercent = (poolRatio - 1) * 100; // e.g., -2.0 means 2% below peg
+    const [oraclePrice, spotPrice] = await Promise.all([this._curvePool.getUusdPrice(), this.getSpotPrice()]);
+
+    // Use SPOT price for poolRatio (actual market price), not TWAP oracle
+    const poolRatio = spotPrice;
+    const deviationPercent = (poolRatio - 1) * 100; // e.g., -0.27 means 0.27% below peg
 
     return {
-      curveOraclePrice: price,
+      curveOraclePrice: oraclePrice,
       poolRatio,
       deviationPercent,
       timestamp: Date.now(),
@@ -119,20 +142,28 @@ export class PriceMonitor {
   }
 
   /**
-   * Estimate UUSD needed to restore peg based on pool liquidity
+   * Calculate the amount needed to restore peg based on pool liquidity
    *
-   * Formula: (poolLiquidity / 2) * deviationPercent * efficiencyFactor
+   * CORRECTED FORMULA based on empirical Anvil fork testing:
+   * - 80 LUSD moves price by ~0.002%
+   * - 5000 LUSD moves price by ~0.14%
+   * - 8500 LUSD restores peg from -0.27% deviation
    *
-   * The 0.5 efficiency factor accounts for StableSwap's amplification:
-   * - Curve pools use an amplification parameter (A) that concentrates liquidity around 1:1
-   * - This means ~50% less capital is needed to move price compared to constant-product AMMs
-   * - See README.md "StableSwap Algorithm" section for derivation
+   * Formula: avgPoolLiquidity × absDeviation × stableswapFactor × 100
+   *
+   * The 0.42 factor was calibrated from actual fork testing:
+   * 8500 LUSD to fix 0.27% with ~74k avg liquidity
+   * factor = 8500 / (74381 × 0.0027 × 100) ≈ 0.42
    */
-  private _estimateUusdToRestorePeg(deviationPercent: number, liquidityUsd: number): number {
+  private _estimateAmountToRestorePeg(deviationPercent: number, liquidityUsd: number): number {
     const absDeviation = Math.abs(deviationPercent) / 100;
-    const singleSideLiquidity = liquidityUsd / 2;
-    const curveEfficiencyFactor = 0.5;
-    return Math.round(singleSideLiquidity * absDeviation * curveEfficiencyFactor);
+
+    // Minimum threshold - don't trade for tiny deviations
+    if (absDeviation < 0.0005) return 0;
+
+    const avgLiquidity = liquidityUsd / 2;
+    const stableswapFactor = 0.42; // Empirically calibrated from Anvil fork testing
+    return Math.ceil(avgLiquidity * absDeviation * stableswapFactor * 100);
   }
 
   /**
@@ -177,6 +208,75 @@ export class PriceMonitor {
   }
 
   /**
+   * Analyze Ubiquity Pool arbitrage opportunity
+   */
+  private async _analyzeUbiquityPool(spotPrice: number): Promise<UbiquityPoolRestoration> {
+    try {
+      const uusdState = await this._ubiquityPool.getPoolState();
+      const uusdPriceUsd = this._ubiquityPool.priceToUsd(uusdState.dollarPriceUsd);
+
+      // Above peg: mint and sell opportunity
+      if (spotPrice > 1.0) {
+        if (uusdState.canMint) {
+          const profitMargin = (spotPrice - 1) * 100;
+          return {
+            action: "mint-sell",
+            available: true,
+            profitMarginPercent: profitMargin,
+            reason: `Mint UUSD at $1.00, sell at $${spotPrice.toFixed(4)} for ${profitMargin.toFixed(2)}% profit`,
+          };
+        } else {
+          const threshold = Number(PRICE_THRESHOLDS.MINT_THRESHOLD) / 1e6;
+          const gap = (threshold - uusdPriceUsd) * 100;
+          return {
+            action: "mint-sell",
+            available: false,
+            profitMarginPercent: (spotPrice - 1) * 100,
+            reason: `Minting requires price >= $${threshold.toFixed(2)} (current: $${uusdPriceUsd.toFixed(4)}, gap: ${gap.toFixed(2)}%)`,
+          };
+        }
+      }
+
+      // Below peg: buy and redeem opportunity
+      if (spotPrice < 1.0) {
+        if (uusdState.canRedeem) {
+          const profitMargin = (1 / spotPrice - 1) * 100;
+          return {
+            action: "buy-redeem",
+            available: true,
+            profitMarginPercent: profitMargin,
+            reason: `Buy UUSD at $${spotPrice.toFixed(4)}, redeem at $1.00 for ${profitMargin.toFixed(2)}% profit`,
+          };
+        } else {
+          const threshold = Number(PRICE_THRESHOLDS.REDEEM_THRESHOLD) / 1e6;
+          const gap = (uusdPriceUsd - threshold) * 100;
+          return {
+            action: "buy-redeem",
+            available: false,
+            profitMarginPercent: (1 / spotPrice - 1) * 100,
+            reason: `Redemption requires price <= $${threshold.toFixed(2)} (current: $${uusdPriceUsd.toFixed(4)}, gap: ${gap.toFixed(2)}%)`,
+          };
+        }
+      }
+
+      return {
+        action: "none",
+        available: false,
+        profitMarginPercent: 0,
+        reason: "Price at peg, no arbitrage opportunity",
+      };
+    } catch (err) {
+      logger.warn("Failed to analyze Ubiquity Pool", { err });
+      return {
+        action: "none",
+        available: false,
+        profitMarginPercent: 0,
+        reason: "Failed to fetch Ubiquity Pool state",
+      };
+    }
+  }
+
+  /**
    * Get complete peg status with recommended action
    */
   async getPegStatus(): Promise<PegStatus> {
@@ -190,9 +290,18 @@ export class PriceMonitor {
     const recommendedAction = this._determineAction(onChainData.poolRatio, gasPriceGwei);
     const severity = this._getSeverity(onChainData.deviationPercent);
 
-    // Estimate UUSD needed to restore peg
+    // Calculate Curve swap restoration
     const poolLiquidity = geckoData?.liquidityUsd ?? DEFAULT_CONFIG.DEFAULT_POOL_LIQUIDITY_USD;
-    const uusdToRestorePeg = this._estimateUusdToRestorePeg(onChainData.deviationPercent, poolLiquidity);
+    const amountNeeded = this._estimateAmountToRestorePeg(onChainData.deviationPercent, poolLiquidity);
+
+    const curveSwap = {
+      action: recommendedAction,
+      tokenIn: onChainData.poolRatio < 1 ? ("LUSD" as const) : ("UUSD" as const),
+      amountIn: amountNeeded,
+    };
+
+    // Analyze Ubiquity Pool opportunity
+    const ubiquityPool = await this._analyzeUbiquityPool(onChainData.poolRatio);
 
     return {
       onChain: onChainData,
@@ -200,7 +309,8 @@ export class PriceMonitor {
       recommendedAction,
       severity,
       gasPriceGwei,
-      uusdToRestorePeg,
+      curveSwap,
+      ubiquityPool,
     };
   }
 

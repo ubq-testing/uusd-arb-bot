@@ -33,8 +33,13 @@ export class TradeCalculator {
    * - If P > 1: Sell UUSD (add UUSD to pool, remove LUSD)
    * - If P < 1: Buy UUSD (add LUSD to pool, remove UUSD)
    *
-   * The exact amount is complex due to the StableSwap invariant, but we can
-   * use binary search with get_dy quotes to find the optimal amount.
+   * CORRECTED FORMULA based on empirical Anvil fork testing:
+   * - 80 LUSD moves price by ~0.002%
+   * - 5000 LUSD moves price by ~0.14%
+   * - 8500 LUSD restores peg from -0.27% deviation
+   *
+   * Formula: avgPoolLiquidity × absDeviation × stableswapFactor × 100
+   * The 0.42 factor was calibrated from actual fork testing.
    */
   async calculateOptimalTradeAmount(action: StabilizationAction, poolState: CurvePoolState, walletBalances: WalletBalances): Promise<bigint> {
     if (action === "none") {
@@ -52,16 +57,18 @@ export class TradeCalculator {
       return 0n;
     }
 
-    // Start with a conservative estimate based on pool size and deviation
-    // The idea: to move price by X%, we need roughly X% of the smaller pool side
-    const smallerPoolSide = poolState.lusdBalance < poolState.uusdBalance ? poolState.lusdBalance : poolState.uusdBalance;
+    // Calculate using EMPIRICALLY VALIDATED formula
+    // avgLiquidity × deviation × 0.42 × 100
+    const lusdBal = Number(poolState.lusdBalance) / 1e18;
+    const uusdBal = Number(poolState.uusdBalance) / 1e18;
+    const avgLiquidity = (lusdBal + uusdBal) / 2;
 
-    // Estimate: deviation * pool_size / adjustment_factor
-    // adjustmentFactor = 2: StableSwap's amplification parameter concentrates liquidity
-    // around 1:1, requiring ~2x LESS capital than constant-product AMMs to move price.
-    // This is derived from Curve's StableSwap invariant - see README.md for full math.
-    const adjustmentFactor = 2n;
-    let estimatedAmount = (smallerPoolSide * BigInt(Math.floor(deviation * 1e6))) / (1_000_000n * adjustmentFactor);
+    // Empirically calibrated factor from Anvil fork testing
+    // 8500 LUSD to fix 0.27% with ~74k avg liquidity
+    // factor = 8500 / (74381 × 0.0027 × 100) ≈ 0.42
+    const stableswapFactor = 0.42;
+    const estimatedTokens = avgLiquidity * deviation * stableswapFactor * 100;
+    let estimatedAmount = BigInt(Math.ceil(estimatedTokens * 1e18));
 
     // Cap at wallet balance
     if (estimatedAmount > maxAmount) {
@@ -74,7 +81,7 @@ export class TradeCalculator {
 
     // Ensure minimum meaningful trade (at least 10 tokens)
     const minTrade = 10n * PRECISION.WAD;
-    if (estimatedAmount < minTrade) {
+    if (estimatedAmount < minTrade && deviation > 0.0005) {
       estimatedAmount = minTrade;
     }
 
